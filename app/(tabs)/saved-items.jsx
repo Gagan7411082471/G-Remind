@@ -10,3 +10,4 @@ export const options = {
     <Ionicons name="list" size={size} color={color} />
   ),
 };
+

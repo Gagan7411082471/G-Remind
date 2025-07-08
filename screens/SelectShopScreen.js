@@ -39,24 +39,15 @@ export default function SelectShopScreen() {
     });
   };
 
- const confirmSelection = () => {
+const confirmSelection = () => {
   if (!selectedMarker) {
     Alert.alert("Select a store", "Please tap a store location first");
     return;
   }
-
-  const itemName = route.params?.item;
-  if (itemName) {
-    global.itemStoreMap[itemName] = {
-      storeName: selectedMarker.storeName,
-      latitude: selectedMarker.latitude,
-      longitude: selectedMarker.longitude,
-    };
-  }
-
-  global.selectedStore = selectedMarker; // optional, if still using this
+  global.selectedStore = selectedMarker;
   navigation.goBack();
 };
+
 
 
   return (

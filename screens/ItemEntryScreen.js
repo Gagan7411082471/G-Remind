@@ -3,20 +3,35 @@ import { addDoc, collection, Timestamp } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Card, Text, TextInput, Title } from 'react-native-paper';
-import { db } from '../firebaseConfig'; // update path if needed
+import { db } from '../firebaseConfig';
 import { startLocationUpdates } from '../utils/locationTask';
 
-  if (!global.itemStoreMap) {
-  global.itemStoreMap = {};
-}
+// 🧠 Hugging Face API call (direct call – exposed token, only for testing)
+const fetchCategoryFromAI = async (itemName) => {
+  try {
+    const response = await fetch('https://api-inference.huggingface.co/models/facebook/bart-large-mnli', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token, // ⛔ Replace with your real token
+      },
+      body: JSON.stringify({
+        inputs: itemName,
+        parameters: {
+candidate_labels: [
+  'Vegetable', 'Fruit', 'Dairy', 'Grocery', 'Hygiene', 'Electronics', 'Stationery',
+  'Furniture', 'Cleaning', 'Medicine', 'Beverages', 'Cosmetics', 'Bakery', 'Frozen Food'
+],
+        },
+      }),
+    });
 
-const categoryMap = {
-  tomato: 'Vegetable',
-  onion: 'Vegetable',
-  rice: 'Grocery',
-  milk: 'Dairy',
-  apple: 'Fruit',
-  soap: 'Hygiene',
+    const result = await response.json();
+    return result?.labels?.[0] || 'Uncategorized';
+  } catch (error) {
+    console.error('AI API Error:', error);
+    return 'Uncategorized';
+  }
 };
 
 export default function ItemEntryScreen() {
@@ -26,31 +41,22 @@ export default function ItemEntryScreen() {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
 
-useEffect(() => {
-  if (isFocused && item) {
-    const store = global.itemStoreMap[item];
-    if (store) {
-      setPreferredStore(store);
+  useEffect(() => {
+    if (isFocused && global.selectedStore) {
+      setPreferredStore(global.selectedStore);
+      global.selectedStore = null;
     }
-  }
-}, [isFocused]);
 
-useEffect(() => {
-  if (isFocused && global.selectedStore) {
-    setPreferredStore(global.selectedStore);
-    global.selectedStore = null;
-  }
+    // Start background location tracking once
+    startLocationUpdates();
+  }, [isFocused]);
 
-  // Start background tracking ONCE
-  startLocationUpdates();
-}, [isFocused]);
-
-
-
-  const handleInputChange = (text) => {
+  // 🔄 Modified to use AI API for category
+  const handleInputChange = async (text) => {
     setItem(text);
     const lower = text.toLowerCase();
-    setCategory(categoryMap[lower] || 'Uncategorized');
+    const aiCategory = await fetchCategoryFromAI(lower);
+    setCategory(aiCategory);
   };
 
   const handleSubmit = async () => {
@@ -59,14 +65,10 @@ useEffect(() => {
       await addDoc(collection(db, 'items'), {
         item,
         category,
-        store: global.itemStoreMap[item] || null,
+        preferredStore,
         status: 'pending',
         timestamp: Timestamp.now(),
       });
-
-      delete global.itemStoreMap[item];
-
-
       alert(`Item "${item}" added to Firestore`);
       setItem('');
       setCategory('');
@@ -77,13 +79,12 @@ useEffect(() => {
   };
 
   const goToMap = () => {
-  if (!item.trim()) {
-    alert("Please enter an item first");
-    return;
-  }
-  navigation.navigate('select-shop', { item });
-};
-
+    if (!item.trim()) {
+      alert("Please enter an item first");
+      return;
+    }
+    navigation.navigate('select-shop', { item });
+  };
 
   return (
     <View style={styles.container}>
@@ -102,27 +103,15 @@ useEffect(() => {
               Detected Category: <Text style={{ fontWeight: 'bold' }}>{category}</Text>
             </Text>
           )}
-
-          <Button
-            mode="outlined"
-            onPress={goToMap}
-            style={{ marginBottom: 10 }}
-          >
+          <Button mode="outlined" onPress={goToMap} style={{ marginBottom: 10 }}>
             {preferredStore ? "Change Preferred Store" : "Choose Preferred Store"}
           </Button>
-
           {preferredStore && (
-  <Text>
-    Selected for {item}: {preferredStore.storeName}
-  </Text>
-)}
-
-
-          <Button
-            mode="contained"
-            onPress={handleSubmit}
-            disabled={!item}
-          >
+            <Text>
+              Selected for {item}: {preferredStore.storeName}
+            </Text>
+          )}
+          <Button mode="contained" onPress={handleSubmit} disabled={!item}>
             Add Item
           </Button>
         </Card.Content>
